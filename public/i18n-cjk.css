@@ -1,0 +1,11 @@
+/* Chinese interface fonts (system fonts only, nothing downloaded). Loaded by i18n.js for zh-TW / zh-CN. */
+:root:lang(zh-TW) body, :root:lang(zh-TW) button, :root:lang(zh-TW) input, :root:lang(zh-TW) select, :root:lang(zh-TW) textarea {
+  font-family: "Segoe UI", "Microsoft JhengHei", "Noto Sans TC", "PingFang TC", "Heiti TC", system-ui, sans-serif;
+}
+:root:lang(zh-CN) body, :root:lang(zh-CN) button, :root:lang(zh-CN) input, :root:lang(zh-CN) select, :root:lang(zh-CN) textarea {
+  font-family: "Segoe UI", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", "Heiti SC", system-ui, sans-serif;
+}
+:root:lang(zh-TW) .cutpilot-timeline, :root:lang(zh-CN) .cutpilot-timeline { line-height: 1.5; }
+.cutpilot-timeline { margin: 4px 0; padding-left: 18px; font-size: 11px; color: var(--muted); max-height: 160px; overflow: auto; }
+.cutpilot-settings { display: grid; gap: 6px; margin: 6px 0; }
+.cutpilot h5 { margin: 8px 0 2px; font-size: 12px; }

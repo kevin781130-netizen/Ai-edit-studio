@@ -1,7 +1,7 @@
 'use strict';
 // AI Edit Studio — Director 0.4 editor. One state model; the DOM is a view.
 import { EditHistory } from './edit-history.js';
-import { t, LANG, LOCALE, applyLanguage } from './i18n.js';
+import { t, tm, LANG, LOCALE, applyLanguage } from './i18n.js';
 import { parseSrt, mapCaptions } from './captions.js';
 import { applyOperations, coreClips, diffEdits, layout, totalDuration, clipAt, editPoints, unusedRanges, formatTime, LIMITS, newClipId, TRANSITIONS, COLOR_DEFAULTS } from './edit-ops.js';
 import { reviewEdit } from './insights.js';
@@ -12,6 +12,7 @@ import { initDirector07, render07, onTab07, reset07, decorateExport } from './di
 import { initDirector08, render08, onTab08, reset08 } from './director08.js';
 import { initDirector09, render09, onTab09 } from './director09.js';
 import { initMusic, renderMusic, onTabMusic } from './music.js';
+import { initCutPilot, resetCutPilot } from './cutpilot.js';
 
 const $ = id => document.getElementById(id);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -31,14 +32,14 @@ const history = new EditHistory(150);
 
 // ---------------------------------------------------------------- utilities
 function toast(text, actions = [], ms = 6000) {
-  const box = $('toast'); box.replaceChildren(el('span', '', text));
+  const box = $('toast'); box.replaceChildren(el('span', '', tm(text)));
   for (const [label, fn] of actions) { const b = el('button', '', label); b.onclick = () => { box.hidden = true; fn(); }; box.append(b); }
   box.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { box.hidden = true; }, actions.length ? Math.max(ms, 12000) : ms);
 }
 async function api(url, method = 'GET', data) {
   const res = await fetch(url, { method, headers: data === undefined ? {} : { 'Content-Type': 'application/json' }, body: data === undefined ? undefined : JSON.stringify(data), cache: 'no-store' });
   const result = await res.json().catch(() => ({}));
-  if (!res.ok || result.ok === false) { const e = new Error(result.error?.message || `Lokale API: ${res.status}`); e.code = result.error?.code; throw e; }
+  if (!res.ok || result.ok === false) { const e = new Error(tm(result.error?.message || t('Local API: {s}', { s: res.status }), result.error?.code)); e.code = result.error?.code; throw e; }
   return result;
 }
 const endpoint = (action = '') => `/api/studio/projects/${state.project.id}${action ? `/${action}` : ''}`;
@@ -180,7 +181,7 @@ async function openProject(id, { silent = false } = {}) {
   try {
     const { project } = await api(`/api/studio/projects/${id}`);
     player.pause();
-    acceptProject(project); state.dirty = false; state.selection.clear(); state.range = { in: null, out: null }; resetDirector(); reset07(); reset08();
+    acceptProject(project); state.dirty = false; state.selection.clear(); state.range = { in: null, out: null }; resetDirector(); reset07(); reset08(); resetCutPilot();
     state.playhead = 0; state.srcIn = state.srcOut = null; state.beatInfo = null;
     history.reset(snapshot());
     window.history.replaceState(null, '', `#${id}`);
@@ -278,7 +279,7 @@ function renderTimeline() {
     range: state.range, issues, flash: state.flash, stripUrl: i => media('filmstrip', i),
   });
   const total = totalDuration(clips);
-  $('tl-summary').textContent = clips.length ? `${clips.length} shots · ${total.toFixed(1)} s${state.options.duration ? ` / ${t('target {n} s', { n: state.options.duration })}` : ''}` : '';
+  $('tl-summary').textContent = clips.length ? `${t('{n} shots', { n: clips.length })} · ${total.toFixed(1)} s${state.options.duration ? ` / ${t('target {n} s', { n: state.options.duration })}` : ''}` : '';
   const r = state.range; $('range-chip').hidden = !(r.in != null || r.out != null);
   $('range-chip').textContent = `I/O ${r.in != null ? formatTime(r.in, 2) : '—'} → ${r.out != null ? formatTime(r.out, 2) : '—'}`;
 }
@@ -296,7 +297,7 @@ function updateChrome() {
   $('style-apply').disabled = locked; $('style-save').disabled = locked || !p;
   renderDirector(); render07(); render08(); render09(); renderMusic();
 }
-function status(text) { $('status-message').textContent = text; }
+function status(text) { $('status-message').textContent = tm(text); }
 function statusView() {
   const p = state.project; if (!p) return;
   const running = busyStates.includes(p.status);
@@ -415,7 +416,7 @@ function renderSourceScrub() {
   const head = el('i', 'head'); head.style.left = `${(player.time || 0) / s.duration * 100}%`; nodes.push(head);
   bar.replaceChildren(...nodes);
   $('source-marks').hidden = state.srcIn == null && state.srcOut == null;
-  $('source-marks').textContent = `In ${state.srcIn != null ? formatTime(state.srcIn, 2) : '—'} · Uit ${state.srcOut != null ? formatTime(state.srcOut, 2) : '—'}`;
+  $('source-marks').textContent = `In ${state.srcIn != null ? formatTime(state.srcIn, 2) : '—'} · ${t('Out')} ${state.srcOut != null ? formatTime(state.srcOut, 2) : '—'}`;
 }
 
 // Review (live, client-side, same heuristics as studio_review)
@@ -440,10 +441,10 @@ function renderReview() {
   $('fix-all').disabled = busy() || !safe.length; $('fix-all').textContent = safe.length ? t('Apply {n} fix(es)', { n: safe.length }) : t('No automatic fixes');
   if (!r.issues.length) { $('issues').replaceChildren(el('li', 'issue-item ok', t('✓ No issues found. Watch the rendered preview for the final check.'))); return; }
   $('issues').replaceChildren(...r.issues.map(issue => {
-    const li = el('li', `issue-item ${issue.severity}`); li.append(el('div', '', issue.message));
+    const li = el('li', `issue-item ${issue.severity}`); li.append(el('div', '', tm(issue.message)));
     const acts = el('div', 'acts');
     if (Number.isFinite(issue.time)) { const go = el('button', 'ghost', t('Go to {t}', { t: formatTime(issue.time, 1) })); go.onclick = () => { seek(issue.time); if (Number.isInteger(issue.clip)) select(issue.clip); }; acts.append(go); }
-    if (issue.fix) { const fix = el('button', 'secondary', issue.fix.label); fix.onclick = () => edit(issue.fix.operations, issue.fix.label); fix.disabled = busy(); acts.append(fix); }
+    if (issue.fix) { const fix = el('button', 'secondary', tm(issue.fix.label)); fix.onclick = () => edit(issue.fix.operations, issue.fix.label); fix.disabled = busy(); acts.append(fix); }
     if (acts.childElementCount) li.append(acts);
     return li;
   }));
@@ -711,14 +712,14 @@ async function loadHistory() {
     root.replaceChildren(...rows.map(r => {
       const li = el('li', r.revision === state.project.revision ? 'current' : '');
       const who = /agent|claude|codex|cli/i.test(r.author) ? 'agent' : r.author === 'engine' ? 'engine' : 'editor';
-      li.append(el('span', `who ${who}`, `${who === 'agent' ? '🤖 ' : ''}${r.author} · rev ${r.revision} · ${new Date(r.at).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}`), el('span', '', r.summary), el('small', 'muted', `${r.clipCount} shots · ${Number(r.duration).toFixed(1)} s`));
+      li.append(el('span', `who ${who}`, `${who === 'agent' ? '🤖 ' : ''}${r.author} · rev ${r.revision} · ${new Date(r.at).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}`), el('span', '', tm(r.summary)), el('small', 'muted', `${t('{n} shots', { n: r.clipCount })} · ${Number(r.duration).toFixed(1)} s`));
       const acts = el('div', 'acts');
       if (r.revision > 1) { const d = el('button', 'ghost', t('What changed?')); d.onclick = () => showDiff(r.revision - 1, r.revision); acts.append(d); }
       if (r.revision !== state.project.revision) { const back = el('button', 'secondary', t('Restore')); back.onclick = () => restore(r.revision); acts.append(back); }
       li.append(acts); return li;
     }));
     const feed = rows.filter(r => /agent|claude|codex|cli/i.test(r.author)).slice(0, 8);
-    $('agent-feed').replaceChildren(...(feed.length ? feed.map(r => { const li = el('li'); li.append(el('span', 'who agent', `🤖 rev ${r.revision} · ${new Date(r.at).toLocaleTimeString(LOCALE)}`), el('span', '', r.summary)); return li; }) : [el('li', 'muted', t('No agent activity in this project yet.'))]));
+    $('agent-feed').replaceChildren(...(feed.length ? feed.map(r => { const li = el('li'); li.append(el('span', 'who agent', `🤖 rev ${r.revision} · ${new Date(r.at).toLocaleTimeString(LOCALE)}`), el('span', '', tm(r.summary))); return li; }) : [el('li', 'muted', t('No agent activity in this project yet.'))]));
   } catch (e) { toast(e.message); }
 }
 async function showDiff(from, to) {
@@ -726,7 +727,7 @@ async function showDiff(from, to) {
     const { diff } = await api(`${endpoint('diff')}?from=${from}&to=${to}`);
     const box = $('history-diff'); box.hidden = false;
     const lines = [el('div', '', ''), el('div', '', t('Duration {a} s → {b} s', { a: diff.durationBefore.toFixed(1), b: diff.durationAfter.toFixed(1) }))];
-    lines[0].append(el('b', '', `Rev ${from} → ${to}: `), document.createTextNode(diff.summary));
+    lines[0].append(el('b', '', `Rev ${from} → ${to}: `), document.createTextNode(tm(diff.summary)));
     for (const c of diff.changed.slice(0, 12)) lines.push(el('div', 'muted', `Shot ${c.index + 1}: ${c.fields.map(f => `${f} ${fmtVal(c.before[f])} → ${fmtVal(c.after[f])}`).join(', ')}`));
     for (const c of diff.added.slice(0, 8)) lines.push(el('div', 'muted', t('＋ shot {n}: source {s} {a}–{b}', { n: c.index + 1, s: c.sourceIndex + 1, a: formatTime(c.start, 1), b: formatTime(c.end, 1) })));
     for (const c of diff.removed.slice(0, 8)) lines.push(el('div', 'muted', t('− removed: source {s} {a}–{b}', { s: c.sourceIndex + 1, a: formatTime(c.start, 1), b: formatTime(c.end, 1) })));
@@ -1079,6 +1080,7 @@ initDirector07({ state, api, endpoint, toast, status, save, acceptProject, rende
   sources, peekSource, refreshList, openProject: id => openProject(id), pollSoon: () => { if (!poll.running) { clearTimeout(poll.timer); poll(); } } });
 initDirector09({ state, api, endpoint, toast, status, save, acceptProject, renderAll, statusView, history, snapshot, fillOptions, updateChrome, conflict, busy, edit, setOption, upload,
   pollSoon: () => { if (!poll.running) { clearTimeout(poll.timer); poll(); } } });
+initCutPilot({ state, api, toast, sources, peekSource, refreshList, openProject: id => openProject(id) });
 initMusic({ state, api, endpoint, toast, save, acceptProject, renderAll, statusView, history, snapshot, fillOptions, updateChrome, conflict, busy });
 initDirector08({ state, api, endpoint, toast, status, save, acceptProject, renderAll, statusView, seek, history, snapshot, fillOptions, updateChrome, conflict, busy, edit, peekSource,
   pollSoon: () => { if (!poll.running) { clearTimeout(poll.timer); poll(); } } });

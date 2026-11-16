@@ -1,16 +1,33 @@
-// Interface language. English is the default; Dutch is a full translation.
+// Interface language. English is the default; Dutch, Traditional Chinese (Taiwan) and Simplified Chinese
+// (China) are full translations. The Chinese dictionaries live in i18n.zh-TW.js / i18n.zh-CN.js (same English
+// keys as NL) and load only when chosen, so upstream changes to this file rarely conflict with them.
 // t(englishText, vars) returns the translation for the active language and fills {placeholders}.
+// tm(message, code) also localizes runtime messages from the engine (errors, status, review notes).
 // applyLanguage() translates the static HTML (text nodes + placeholder/title/aria-label/alt).
 
+export const LANGUAGES = ['en', 'nl', 'zh-TW', 'zh-CN'];
+export function detectLanguage(saved, browserLanguages = []) {
+  if (LANGUAGES.includes(saved)) return saved;
+  for (const raw of browserLanguages) {
+    const tag = String(raw || '').toLowerCase();
+    if (/^zh-(?:tw|hk|mo)|^zh-hant/.test(tag)) return 'zh-TW';
+    if (tag.startsWith('zh')) return 'zh-CN';
+    if (tag.startsWith('nl')) return 'nl';
+    if (tag.startsWith('en')) return 'en';
+  }
+  return 'en';
+}
 function pickLanguage() {
-  try {
-    const saved = localStorage.getItem('studio-lang');
-    if (saved === 'nl' || saved === 'en') return saved;
-  } catch { /* storage may be unavailable */ }
-  return (navigator.language || '').toLowerCase().startsWith('nl') ? 'nl' : 'en';
+  let saved = null;
+  try { saved = localStorage.getItem('studio-lang'); } catch { /* storage may be unavailable */ }
+  const nav = globalThis.navigator;
+  return detectLanguage(saved, nav ? [...(nav.languages ?? []), nav.language] : []);
 }
 export const LANG = pickLanguage();
-export const LOCALE = LANG === 'nl' ? 'nl-NL' : 'en-GB';
+export const LOCALE = { nl: 'nl-NL', 'zh-TW': 'zh-TW', 'zh-CN': 'zh-CN' }[LANG] ?? 'en-GB';
+import { NL_EXTRA } from './i18n.nl-extra.js';
+const ZH = LANG === 'zh-TW' || LANG === 'zh-CN'
+  ? (await import(LANG === 'zh-TW' ? './i18n.zh-TW.js' : './i18n.zh-CN.js')).default : null;
 
 export const NL = {
  "DIRECTOR 0.12": "DIRECTOR 0.12",
@@ -932,10 +949,35 @@ export const NL = {
  "🤖 {by} changed rev {r}": "🤖 {by} wijzigde rev {r}"
 };
 
+const DICT = LANG === 'nl' ? { ...NL_EXTRA, ...NL } : ZH ? ZH.dict : null;
+// A Chinese UI never silently falls back to English: missing keys are collected and reported once.
+export const MISSING = new Set();
+function lookup(text) {
+  if (!DICT) return text;
+  if (Object.hasOwn(DICT, text)) return DICT[text];
+  if (ZH && text && /[A-Za-z]/.test(text) && !MISSING.has(text)) { MISSING.add(text); console.warn(`[i18n ${LANG}] missing translation:`, text); }
+  return text;
+}
 export function t(text, vars) {
-  let out = LANG === 'nl' && Object.hasOwn(NL, text) ? NL[text] : text;
+  let out = lookup(text);
   if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
   return out;
+}
+/** Runtime messages (engine errors, status, review notes, history summaries) in the chosen language. */
+export function tm(message, code) {
+  const text = String(message ?? '');
+  if (!ZH) return DICT && Object.hasOwn(DICT, text) ? DICT[text] : text;
+  if (!text) return text;
+  if (Object.hasOwn(ZH.dict, text)) return ZH.dict[text];
+  for (const [pattern, template] of ZH.patterns) {
+    const m = text.match(pattern);
+    // $1 inserts a captured value as is (names, numbers); $t1 translates the captured text too.
+    if (m) return template.replace(/\$(t?)(\d)/g, (_, tr, i) => (tr ? tm(m[Number(i)] ?? '') : m[Number(i)] ?? ''));
+  }
+  if (!/[A-Za-z]{3}/.test(text)) return text; // already localized, numbers or symbols only
+  if (text.includes(' · ')) return text.split(' · ').map(part => tm(part)).join(' · ');
+  if (code && Object.hasOwn(ZH.codes, code)) return ZH.codes[code];
+  return lookup(text);
 }
 
 const SKIP = new Set(['SCRIPT', 'STYLE', 'PRE', 'CODE', 'KBD', 'TEXTAREA']);
@@ -943,7 +985,8 @@ const ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
 export function applyLanguage(root = document) {
   document.documentElement.lang = LANG;
   if (LANG === 'en') return;
-  if (Object.hasOwn(NL, document.title)) document.title = NL[document.title];
+  if (ZH && !document.getElementById('i18n-cjk-css')) document.head?.append(Object.assign(document.createElement('link'), { id: 'i18n-cjk-css', rel: 'stylesheet', href: 'i18n-cjk.css' }));
+  if (Object.hasOwn(DICT, document.title)) document.title = DICT[document.title];
   const walker = document.createTreeWalker(root.body ?? root, NodeFilter.SHOW_TEXT, {
     acceptNode: node => (node.parentElement && !SKIP.has(node.parentElement.tagName) && !node.parentElement.closest('[data-no-i18n]') && node.nodeValue.trim()) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
   });
@@ -951,13 +994,13 @@ export function applyLanguage(root = document) {
   while (walker.nextNode()) nodes.push(walker.currentNode);
   for (const node of nodes) {
     const raw = node.nodeValue, key = raw.trim();
-    const hit = Object.hasOwn(NL, key) ? NL[key] : Object.hasOwn(NL, key.replace(/\s+/g, ' ')) ? NL[key.replace(/\s+/g, ' ')] : null;
+    const hit = Object.hasOwn(DICT, key) ? DICT[key] : Object.hasOwn(DICT, key.replace(/\s+/g, ' ')) ? DICT[key.replace(/\s+/g, ' ')] : null;
     if (hit != null) node.nodeValue = raw.replace(key, hit);
   }
   for (const el of (root.body ?? root).querySelectorAll('*')) {
     for (const a of ATTRS) {
       const v = el.getAttribute(a);
-      if (v && Object.hasOwn(NL, v)) el.setAttribute(a, NL[v]);
+      if (v && Object.hasOwn(DICT, v)) el.setAttribute(a, DICT[v]);
     }
   }
 }
