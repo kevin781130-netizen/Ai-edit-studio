@@ -135,6 +135,16 @@ export function createAssetPanelService({ invoke, studio, clock = () => Date.now
     return { path: asset.local_path, size: metadata.size, type: mime };
   }
 
+  async function resolveAudio(id) {
+    guard(typeof id === 'string' && UUID.test(id), 'ASSET_ID', 'Invalid audio asset ID.');
+    const result = await run(['audio-preview', '--asset-id', id]);
+    const audio = result.asset;
+    guard(audio?.asset_id === id && audio.provider === 'local' &&
+      audio.media_type === 'audio' && typeof audio.local_path === 'string' &&
+      audio.local_path.length > 0, 'NOT_LOCAL', 'Only SHA256 verified local audio can be used.', 403);
+    return audio;
+  }
+
   async function resolveLocal(id) {
     guard(typeof id === 'string' && UUID.test(id), 'ASSET_ID', 'Invalid asset ID.');
     const output = await run(['resolve', '--asset-id', id]);
@@ -176,7 +186,7 @@ export function createAssetPanelService({ invoke, studio, clock = () => Date.now
     return { path: hit.local_path, size: s.size, type };
   }
 
-  return { search, pin, importLocal, importPack, previewAudio, resolveLocal, useLocal, preview };
+  return { search, pin, importLocal, importPack, previewAudio, resolveLocal, resolveAudio, useLocal, preview };
 }
 
 let single;
@@ -195,6 +205,8 @@ async function defaultService() {
   });
   return single;
 }
+
+export async function getDefaultAssetService() { return defaultService(); }
 
 export async function handleAssetPanelApi({ method, pathname, request, response, json, readJsonBody, service }) {
   try {
