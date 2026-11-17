@@ -100,6 +100,41 @@ export function createAssetPanelService({ invoke, studio, clock = () => Date.now
     return output;
   }
 
+  async function importPack(body = {}) {
+    const archive = String(body.path ?? '').trim();
+    const sourceId = String(body.sourceId ?? '');
+    guard(['kenney-particle-cc0', 'kenney-ui-cc0'].includes(sourceId),
+      'PACK_SOURCE', 'Choose one of the listed CC0 sources.');
+    guard(archive.length >= 1 && archive.length <= 2048 &&
+      path.isAbsolute(archive) && !/^(?:\\\\|\/\/)/.test(archive) &&
+      archive.toLowerCase().endsWith('.zip'),
+      'PACK_PATH', 'Choose an existing local ZIP by absolute path.');
+    guard(body.confirm === true, 'PACK_CONSENT',
+      'Confirm the source, ZIP license and permission to import.', 403);
+    const output = await run(['pack-import', '--archive', archive, '--source-id',
+      sourceId, '--confirmed']);
+    guard(output?.pack?.source_id === sourceId && Number.isInteger(output.pack.imported),
+      'PACK_RESPONSE', 'The pack backend did not verify its result.', 502);
+    return output;
+  }
+
+  async function previewAudio(assetId) {
+    guard(typeof assetId === 'string' && UUID.test(assetId), 'ASSET_ID', 'Invalid asset ID.');
+    const result = await run(['audio-preview', '--asset-id', assetId]);
+    const asset = result.asset;
+    guard(asset?.asset_id === assetId && asset.provider === 'local' &&
+      asset.media_type === 'audio' && typeof asset.local_path === 'string' &&
+      asset.local_path.length > 0, 'NOT_LOCAL', 'Only cached local audio is previewable.', 403);
+    const mime = {
+      '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+    }[path.extname(asset.title || '').toLowerCase()];
+    guard(mime, 'AUDIO_FORMAT', 'Audio preview format unsupported.');
+    const metadata = await stat(asset.local_path);
+    guard(metadata.isFile() && metadata.size > 0 && metadata.size <= 12 * 1024 * 1024,
+      'AUDIO_SIZE', 'Audio preview exceeds 12 MiB.');
+    return { path: asset.local_path, size: metadata.size, type: mime };
+  }
+
   async function resolveLocal(id) {
     guard(typeof id === 'string' && UUID.test(id), 'ASSET_ID', 'Invalid asset ID.');
     const output = await run(['resolve', '--asset-id', id]);
@@ -141,7 +176,7 @@ export function createAssetPanelService({ invoke, studio, clock = () => Date.now
     return { path: hit.local_path, size: s.size, type };
   }
 
-  return { search, pin, importLocal, resolveLocal, useLocal, preview };
+  return { search, pin, importLocal, importPack, previewAudio, resolveLocal, useLocal, preview };
 }
 
 let single;
@@ -169,7 +204,17 @@ export async function handleAssetPanelApi({ method, pathname, request, response,
     if (method === 'POST' && pathname === '/api/cutpilot/assets/search') output = await s.search(body);
     else if (method === 'POST' && pathname === '/api/cutpilot/assets/pin') output = await s.pin(body);
     else if (method === 'POST' && pathname === '/api/cutpilot/assets/import') output = await s.importLocal(body);
+    else if (method === 'POST' && pathname === '/api/cutpilot/assets/pack-import') output = await s.importPack(body);
     else if (method === 'POST' && pathname === '/api/cutpilot/assets/use') output = await s.useLocal(body);
+    else if (method === 'GET' && pathname === '/api/cutpilot/assets/preview-audio') {
+      const id = new URL(request.url, 'http://127.0.0.1').searchParams.get('assetId');
+      const audio = await s.previewAudio(id);
+      response.writeHead(200, { 'Content-Type': audio.type, 'Content-Length': audio.size,
+        'Accept-Ranges': 'none', 'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin' });
+      createReadStream(audio.path).pipe(response);
+      return;
+    }
     else if (method === 'GET' && pathname === '/api/cutpilot/assets/preview') {
       const id = new URL(request.url, 'http://127.0.0.1').searchParams.get('assetId');
       const pic = await s.preview(id);
