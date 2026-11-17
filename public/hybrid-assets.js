@@ -107,6 +107,14 @@ function renderResults() {
     } else if (hit.origin !== 'online' && !hit.local_path) {
       body.append(element('small', 'muted', '僅收藏來源；需先合法取得檔案再匯入'));
     }
+    if (hit.provider === 'local' && type === 'audio' && hit.asset_id && hit.local_path) {
+      const player = element('audio');
+      player.controls = true; player.preload = 'none';
+      player.src = '/api/cutpilot/assets/preview-audio?assetId=' +
+        encodeURIComponent(hit.asset_id);
+      player.setAttribute('aria-label', '試聽 ' + (hit.title || '音效'));
+      body.append(player);
+    }
     body.append(controls);
     card.append(thumbnail(hit), body);
     holder.append(card);
@@ -136,6 +144,28 @@ async function importLocal() {
   announce('已匯入本地 SHA256 去重快取；未上傳外部服務');
   renderResults();
 }
+async function importKenneyPack() {
+  const sourceId = $('cp-pack-source').value;
+  const zip = $('cp-pack-path').value.trim();
+  if (!zip) { announce('請貼上已下載的 Kenney ZIP 完整本地路徑'); return; }
+  const names = {
+    'kenney-particle-cc0': 'Kenney Particle Pack (CC0)',
+    'kenney-ui-cc0': 'Kenney UI Pack (CC0)',
+  };
+  if (!window.confirm('確認 ZIP 來自官方 ' + names[sourceId] +
+      '，且你已核對內附 CC0 授權？將只匯入本機，不會上傳或下載。')) return;
+  announce('離線解析 ZIP、檢查授權及 SHA256，請勿重複按鈕…');
+  const result = await state.api('/api/cutpilot/assets/pack-import', 'POST', {
+    path: zip, sourceId, confirm: true,
+  });
+  announce('素材包已匯入：新增 ' + result.pack.imported +
+    '、重複 ' + result.pack.reused + '。來源真偽仍需人工核對。');
+  $('cp-assets-query').value = sourceId === 'kenney-particle-cc0' ? '粒子' : '貼紙';
+  $('cp-assets-scope').value = 'local';
+  $('cp-assets-type').value = 'image';
+  await search();
+}
+
 export function mountHybridAssets(context) {
   if ($('cp-assets-panel')) return;
   const host = $('moments')?.parentElement;
@@ -160,6 +190,25 @@ export function mountHybridAssets(context) {
   local.placeholder = '本地檔案絕對路徑（.mp4 / .png / .wav…）';
   panel.append(element('h5', '', '匯入自己的素材'), local,
     actions(button('匯入本地', importLocal)));
+  const sources = selector('cp-pack-source', [
+    ['kenney-particle-cc0', 'Kenney 粒子包 · CC0'],
+    ['kenney-ui-cc0', 'Kenney UI 貼紙素材 · CC0'],
+  ]);
+  sources.id = 'cp-pack-source';
+  const zip = element('input');
+  zip.id = 'cp-pack-path';
+  zip.placeholder = '已下載 ZIP 的絕對路徑（不會連網下載）';
+  const official = element('div', 'cp-pack-official');
+  const a = element('a', 'cp-asset-source', 'Kenney Particle Pack 官方下載');
+  a.href = 'https://kenney.nl/assets/particle-pack'; a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  const b = element('a', 'cp-asset-source', 'Kenney UI Pack 官方下載');
+  b.href = 'https://kenney.nl/assets/ui-pack'; b.target = '_blank';
+  b.rel = 'noopener noreferrer';
+  official.append(a, b);
+  panel.append(element('h5', '', 'CC0 素材包匯入'), sources, zip, official,
+    actions(button('匯入 Kenney ZIP（離線）', importKenneyPack)),
+    element('p', 'help', '需要官方 ZIP 內含 CC0 授權文件。僅支援本機檔案；音效可試聽，尚不能直接放入 SFX 時間軸。'));
   const message = element('p', 'muted small'); message.id = 'cp-assets-message';
   message.setAttribute('aria-live', 'polite');
   const results = element('div', 'cp-asset-results'); results.id = 'cp-assets-results';

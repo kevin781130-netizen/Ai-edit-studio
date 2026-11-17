@@ -21,3 +21,6 @@
 .cp-native-pack{grid-template-columns:35px minmax(0,1fr)}
 .cp-native-pack .cp-asset-thumb{height:35px;color:var(--accent);font-weight:700}
 .cp-native-pack button{white-space:nowrap}
+
+.cp-pack-official{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}
+.cp-asset-body audio{max-width:100%;height:32px}
