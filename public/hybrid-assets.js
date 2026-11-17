@@ -1,5 +1,6 @@
 // CutPilot hybrid asset browser: search online/local, bookmark, import and open local files.
 // No remote download, no change to the current editor project.
+import { mountNativePacks } from './native-packs.js';
 const $ = id => document.getElementById(id);
 const element = (tag, cls, value) => {
   const n = document.createElement(tag);
@@ -164,4 +165,5 @@ export function mountHybridAssets(context) {
   const results = element('div', 'cp-asset-results'); results.id = 'cp-assets-results';
   panel.append(message, results);
   host.append(panel);
+  mountNativePacks(context);
 }

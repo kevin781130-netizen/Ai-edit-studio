@@ -13,3 +13,11 @@
 .cp-asset-title{overflow-wrap:anywhere;font-size:12px}
 .cp-asset-rights{color:var(--warn);font-size:10px}
 .cp-asset-source{color:var(--accent);text-decoration:underline;font-size:11px}
+
+
+/* Native effects reuse the asset panel's cards and color system. */
+.cp-native-packs{border-top:1px solid var(--edge-2);margin-top:16px;padding-top:10px}
+.cp-native-packs>input,.cp-native-packs>select{width:100%;margin:4px 0;padding:7px;border:1px solid var(--edge-2);background:var(--panel-2);border-radius:5px}
+.cp-native-pack{grid-template-columns:35px minmax(0,1fr)}
+.cp-native-pack .cp-asset-thumb{height:35px;color:var(--accent);font-weight:700}
+.cp-native-pack button{white-space:nowrap}
