@@ -66,3 +66,34 @@ test('untrusted or online IDs cannot resolve as local', async () => {
   });
   await assert.rejects(bad.useLocal({ assetId: id, confirmRights: true }), /Only imported/);
 });
+
+
+test('Kenney ZIP import requires allowlisted source, absolute path and explicit consent', async () => {
+  const x = setup();
+  await assert.rejects(x.svc.importPack({ path: '/tmp/kenney.zip', sourceId: 'kenney-particle-cc0' }), /Confirm/);
+  await assert.rejects(x.svc.importPack({ path: 'kenney.zip', sourceId: 'kenney-particle-cc0', confirm: true }), /absolute/);
+  await assert.rejects(x.svc.importPack({ path: '/tmp/kenney.zip', sourceId: 'untrusted', confirm: true }), /listed/);
+  assert.equal(x.calls.length, 0);
+});
+test('Pack import dispatch uses only explicitly selected approved source ID', async () => {
+  const calls = [];
+  const s = createAssetPanelService({
+    invoke: async (args) => {
+      calls.push(args);
+      return { pack: { source_id: 'kenney-particle-cc0', imported: 2, reused: 0 } };
+    },
+    studio: {},
+  });
+  const output = await s.importPack({
+    path: '/tmp/kenney.zip', sourceId: 'kenney-particle-cc0', confirm: true,
+  });
+  assert.equal(output.pack.imported, 2);
+  assert.deepEqual(calls[0], ['pack-import', '--archive', '/tmp/kenney.zip',
+    '--source-id', 'kenney-particle-cc0', '--confirmed']);
+});
+test('Audio preview requires verified local metadata', async () => {
+  const x = setup();
+  await assert.rejects(x.svc.previewAudio('bad'), /Invalid asset ID/);
+  const id = '4de4ec0b-54ba-41e4-8cac-d3460b98a1c5';
+  await assert.rejects(x.svc.previewAudio(id), /Only cached local audio/);
+});
