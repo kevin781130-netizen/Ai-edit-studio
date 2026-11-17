@@ -207,6 +207,7 @@ async function routeApi(request, response, url) {
   }
   // Optional CutPilot AI clip selection (fork integration, self-contained in integrations/cutpilot).
   if (pathname === '/api/cutpilot/packs' || pathname.startsWith('/api/cutpilot/packs/')) return (await import('./integrations/cutpilot/native-packs-route.mjs')).handleNativePackApi({ method, pathname, request, response, json, readJsonBody });
+  if (pathname.startsWith('/api/cutpilot/autoposition/')) return (await import('./integrations/cutpilot/autoposition-route.mjs')).handleAutoPositionReviewApi({ method, pathname, request, response, json, readJsonBody });
   if (pathname === '/api/cutpilot/assets/place') return (await import('./integrations/cutpilot/timed-media-route.mjs')).handleTimedAssetApi({ method, pathname, request, response, json, readJsonBody });
   if (pathname.startsWith('/api/cutpilot/assets/')) return (await import('./integrations/cutpilot/assets-route.mjs')).handleAssetPanelApi({ method, pathname, request, response, json, readJsonBody });
   if (pathname.startsWith('/api/cutpilot/')) return (await import('./integrations/cutpilot/studio-route.mjs')).handleCutPilotApi({ method, pathname, request, response, json, readJsonBody });
