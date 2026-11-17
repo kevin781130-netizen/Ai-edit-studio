@@ -4,6 +4,7 @@
 // explicit confirmation → render only through Studio's own Export.
 import { t, tm } from './i18n.js';
 import { formatTime } from './edit-ops.js';
+import { mountHybridAssets } from './hybrid-assets.js';
 
 const $ = id => document.getElementById(id);
 function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
@@ -187,4 +188,4 @@ async function applyPreview() {
 function renderAll() { renderCandidates(); renderFlow(); }
 export function renderCutPilot() { if (!ctx) return; fillSources(); }
 export function resetCutPilot() { clearTimeout(S.timer); Object.assign(S, { job: null, preview: null, applied: null, busy: false, include: null }); if (ctx) { fillSources(); renderAll(); setStatus(''); } }
-export function initCutPilot(context) { ctx = context; build(); fillSources(); }
+export function initCutPilot(context) { ctx = context; build(); fillSources(); mountHybridAssets(context); }

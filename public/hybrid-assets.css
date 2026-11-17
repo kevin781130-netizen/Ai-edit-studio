@@ -1,0 +1,15 @@
+/* Isolated CutPilot asset browser; follows Studio's existing dark palette. */
+.cp-asset-panel{margin:12px 0;padding:12px;border:1px solid var(--edge-2);border-radius:9px}
+.cp-asset-panel>input,.cp-asset-panel>select{width:100%;margin:4px 0;padding:7px;border:1px solid var(--edge-2);background:var(--panel-2);border-radius:5px}
+.cp-asset-panel h4{margin:0 0 7px}
+.cp-asset-panel h5{margin:12px 0 4px}
+.cp-asset-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px}
+.cp-asset-actions button{padding:5px 8px;font-size:11px}
+.cp-asset-results{display:grid;gap:8px;max-height:480px;overflow:auto}
+.cp-asset-card{display:grid;grid-template-columns:66px minmax(0,1fr);gap:7px;background:var(--panel-2);padding:7px;border:1px solid var(--edge);border-radius:7px}
+.cp-asset-thumb{height:66px;background:var(--raise);display:grid;place-items:center;font-size:10px;overflow:hidden;min-width:0}
+.cp-asset-thumb img{width:100%;height:100%;object-fit:cover}
+.cp-asset-body{min-width:0;display:grid;gap:3px}
+.cp-asset-title{overflow-wrap:anywhere;font-size:12px}
+.cp-asset-rights{color:var(--warn);font-size:10px}
+.cp-asset-source{color:var(--accent);text-decoration:underline;font-size:11px}
