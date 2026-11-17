@@ -583,6 +583,41 @@ export async function duplicateProject(id, request = {}) {
   return publicProject(project);
 }
 
+/** Attach a locally verified image source to a NEW isolated project copy.
+ * Called only by the CutPilot adapter. No generic path upload HTTP route.
+ * Existing clips, source indexes, transcripts and edit history are preserved.
+ */
+export async function appendCutPilotMediaSource(id, request = {}) {
+  const project = await getProject(id);
+  if (active.has(project.status)) throw new StudioError('PROJECT_BUSY', 'This project is in progress.');
+  if (request.revision !== project.revision) throw new StudioError('REVISION_CONFLICT', 'Project revision changed.');
+  if (project.sources.length >= LIMITS.sources) throw new StudioError('TOO_MANY_SOURCES', 'Studio source limit reached.');
+  const file = await checkedFile(request.file, [...STILL_EXTENSIONS]);
+  if (file.size > 64 * 1024 ** 2) throw new StudioError('INVALID_MEDIA', 'Sticker image is larger than 64 MiB.');
+  if (!isStillFile(file.file)) throw new StudioError('INVALID_MEDIA', 'Only still images can be attached.');
+  if (project.sources.some(s => s.file.toLowerCase() === file.file.toLowerCase())) {
+    throw new StudioError('DUPLICATE_SOURCE', 'This media is already attached.');
+  }
+  const info = await probeStill(file.file, findFfmpegTools(), STILL_SECONDS);
+  if (!Number.isFinite(info.duration) || info.duration < LIMITS.minSource) {
+    throw new StudioError('INVALID_MEDIA', 'Image source duration is invalid.');
+  }
+  if (active.has(project.status) || request.revision !== project.revision) {
+    throw new StudioError('REVISION_CONFLICT', 'Project changed while probing media.');
+  }
+  const before = editState(project);
+  const index = project.sources.length;
+  project.sources.push({ ...info, ...file, name: path.basename(file.file),
+    hasAudio: false, audioStream: null, audio: [], black: [], motion: [], scenes: [], still: true });
+  project.revision += 1;
+  project.status = 'draft';
+  project.message = 'CutPilot verified local sticker source attached.';
+  await recordRevision(project, before, { by: 'cutpilot-timed-media',
+    summary: 'Attached verified local image source to isolated project copy' });
+  await persist(project);
+  return { project: publicProject(project), sourceIndex: index };
+}
+
 export async function revisionState(id) {
   const project = await getProject(id);
   return { revision: project.revision, status: project.status, progress: project.progress, message: project.message, updatedAt: project.updatedAt, lastChange: project.lastChange ?? null };
