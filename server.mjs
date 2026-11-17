@@ -206,6 +206,7 @@ async function routeApi(request, response, url) {
     return json(response, 200, { ok: true, tool: name, result: await callAgentTool(name, args && typeof args === 'object' ? args : {}, local) });
   }
   // Optional CutPilot AI clip selection (fork integration, self-contained in integrations/cutpilot).
+  if (pathname.startsWith('/api/cutpilot/assets/')) return (await import('./integrations/cutpilot/assets-route.mjs')).handleAssetPanelApi({ method, pathname, request, response, json, readJsonBody });
   if (pathname.startsWith('/api/cutpilot/')) return (await import('./integrations/cutpilot/studio-route.mjs')).handleCutPilotApi({ method, pathname, request, response, json, readJsonBody });
   if (method === 'GET' && pathname === '/api/agent-setup') {
     return json(response, 200, { ok: true, node: process.execPath, mcp: path.join(PROJECT_ROOT, 'mcp.mjs'), cli: path.join(PROJECT_ROOT, 'cli.mjs'),
