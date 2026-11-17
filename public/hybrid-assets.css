@@ -31,3 +31,9 @@
 .cp-time-control input{width:78px;padding:5px;border-radius:5px;border:1px solid var(--edge-2);background:var(--panel)}
 .cp-timed-placement>select{padding:5px;border-radius:5px;border:1px solid var(--edge-2);background:var(--panel)}
 .cp-timed-placement button{white-space:normal}
+
+/* P3 review is intentionally separated from the general asset search panel. */
+.cp-p3-panel{border-top:1px solid var(--edge-2);padding-top:12px;margin-top:14px}
+.cp-p3-panel>input[type=file]{max-width:100%;margin:7px 0;font-size:11px}
+.cp-p3-notes{max-height:160px;overflow:auto}
+.cp-p3-notes p{margin:3px 0;overflow-wrap:anywhere}
