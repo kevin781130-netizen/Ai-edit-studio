@@ -24,3 +24,10 @@
 
 .cp-pack-official{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}
 .cp-asset-body audio{max-width:100%;height:32px}
+
+/* Native timed placement controls; no editor core UI changes. */
+.cp-timed-placement{display:flex;flex-wrap:wrap;gap:6px;align-items:end;padding:6px 0}
+.cp-time-control{display:flex;flex-direction:column;gap:3px;color:var(--muted);font-size:10px}
+.cp-time-control input{width:78px;padding:5px;border-radius:5px;border:1px solid var(--edge-2);background:var(--panel)}
+.cp-timed-placement>select{padding:5px;border-radius:5px;border:1px solid var(--edge-2);background:var(--panel)}
+.cp-timed-placement button{white-space:normal}

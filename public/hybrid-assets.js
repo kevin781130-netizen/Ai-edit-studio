@@ -67,6 +67,62 @@ function thumbnail(hit) {
   return box;
 }
 
+function numberControl(label, value, min, max, step = .1) {
+  const wrapper = element('label', 'cp-time-control', label);
+  const input = element('input');
+  input.type = 'number'; input.min = String(min); input.max = String(max);
+  input.step = String(step); input.value = String(value);
+  wrapper.append(input);
+  return { wrapper, input };
+}
+async function placeInCopy(hit, kind, parameters) {
+  const project = state.projectState?.project;
+  if (!project?.id || !Number.isInteger(project.revision)) {
+    throw new Error('先開啟並儲存一個已有時間軸的 Studio 專案');
+  }
+  if (state.projectState.dirty || state.projectState.pending) {
+    throw new Error('先儲存目前未提交的時間軸修改');
+  }
+  const description = kind === 'sticker' ? 'PNG 疊加貼紙' : '單一音效（占用旁白音軌）';
+  if (!window.confirm('確認有此素材的使用權？將把 ' + description +
+    ' 放入新的專案副本，原專案不變。')) return;
+  const response = await state.api('/api/cutpilot/assets/place', 'POST', {
+    projectId: project.id, revision: project.revision, assetId: hit.asset_id,
+    kind, confirmRights: true, ...parameters,
+  });
+  if (response.status !== 'APPLIED_TO_NEW_COPY') throw new Error('副本建立結果未確認');
+  announce('已建立新副本並定位素材，原始專案未變更');
+  await state.openProject(response.projectId);
+}
+function placementControls(hit) {
+  if (hit.provider !== 'local' || !hit.local_path || !hit.asset_id) return null;
+  const row = element('div', 'cp-timed-placement');
+  const at = numberControl('時間（秒）', 0, 0, 1200);
+  row.append(at.wrapper);
+  if (hit.media_type === 'image' && /\.png$/i.test(hit.title || '')) {
+    const duration = numberControl('持續秒數', 3, .5, 10);
+    const size = numberControl('畫面比例', .3, .15, .7, .05);
+    const pos = selector('', [
+      ['top-right', '右上'], ['top-left', '左上'], ['bottom-right', '右下'],
+      ['bottom-left', '左下'], ['center', '中央'],
+    ]);
+    pos.removeAttribute('id');
+    row.append(duration.wrapper, size.wrapper, pos,
+      button('貼紙疊加到副本', () => placeInCopy(hit, 'sticker', {
+        at: Number(at.input.value), seconds: Number(duration.input.value),
+        size: Number(size.input.value), position: pos.value,
+      })));
+    return row;
+  }
+  if (hit.media_type === 'audio') {
+    const gain = numberControl('音量', .7, 0, 1.5);
+    row.append(gain.wrapper, button('定位音效到副本', () =>
+      placeInCopy(hit, 'sfx', { at: Number(at.input.value), gain: Number(gain.input.value) })));
+    return row;
+  }
+  return null;
+}
+
 function renderResults() {
   const holder = $('cp-assets-results'); if (!holder) return;
   holder.replaceChildren();
@@ -116,6 +172,8 @@ function renderResults() {
       body.append(player);
     }
     body.append(controls);
+    const placement = placementControls(hit);
+    if (placement) body.append(placement);
     card.append(thumbnail(hit), body);
     holder.append(card);
   });
@@ -173,6 +231,7 @@ export function mountHybridAssets(context) {
   state.api = context.api;
   state.toast = context.toast;
   state.openProject = context.openProject;
+  state.projectState = context.state;
   const panel = element('section', 'clip-finder cp-asset-panel');
   panel.id = 'cp-assets-panel';
   panel.append(element('h4', '', '素材庫 · Hybrid Assets'));
